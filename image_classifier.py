@@ -1,6 +1,6 @@
 """Dataset discovery and training helpers for the image classifier app."""
 
-from __future__ import annotations
+
 
 import io
 import random
