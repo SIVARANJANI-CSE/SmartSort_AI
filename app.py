@@ -92,92 +92,135 @@ def render_result_card(label: str, relative_score: float) -> None:
     st.html(
         f"""
         <style>
-          .sort-result {{
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 116px;
-            gap: 16px;
-            align-items: stretch;
-            padding: 20px;
-            min-height: 220px;
-            border: 1px solid {color}28;
-            border-radius: 18px;
-            background: {details["soft_color"]};
-            color: #183329;
-            font-family: inherit;
-            box-shadow: 0 12px 32px rgba(11, 40, 42, 0.06);
+          .sort-result,
+          .sort-result * {{
+            box-sizing: border-box !important;
           }}
-          .sort-result h3 {{
-            margin: 8px 0 16px;
-            color: {color};
-            font-size: 1.35rem;
+          .sort-result {{
+            display: grid !important;
+            /* Proportional columns keep the recommendation wide and the bin compact. */
+            grid-template-columns: minmax(0, 1.5fr) minmax(145px, 0.95fr) !important;
+            gap: 22px !important;
+            align-items: stretch !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 26px !important;
+            min-height: 390px !important;
+            border: 1px solid #dce5ee !important;
+            border-radius: 22px !important;
+            background: #ffffff !important;
+            color: #172b4d !important;
+            font-family: inherit !important;
+            box-shadow: 0 12px 32px rgba(11, 40, 42, 0.08) !important;
+          }}
+          .sort-result > div:first-child {{
+            min-width: 0 !important;
           }}
           .sort-result .eyebrow {{
-            color: #526174;
-            font-size: .78rem;
-            font-weight: 650;
-            letter-spacing: .08em;
+            color: #526174 !important;
+            font-size: .82rem !important;
+            font-weight: 800 !important;
+            letter-spacing: .06em !important;
+          }}
+          .sort-result h3 {{
+            margin: 12px 0 18px !important;
+            color: {color} !important;
+            font-size: 1.65rem !important;
+            line-height: 1.2 !important;
+            font-weight: 800 !important;
           }}
           .sort-result .score {{
-            margin: 0;
-            color: #263648;
-            font-size: .9rem;
-            font-weight: 600;
+            margin: 0 !important;
+            color: #8a9bb0 !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+          }}
+          .sort-result .score strong {{
+            color: {color} !important;
+            font-weight: 800 !important;
           }}
           .sort-result .track {{
-            height: 9px;
-            margin: 8px 0 17px;
-            overflow: hidden;
-            border-radius: 99px;
-            background: #dce5e7;
+            height: 12px !important;
+            margin: 14px 0 22px !important;
+            overflow: hidden !important;
+            border-radius: 99px !important;
+            background: #e1e7eb !important;
           }}
           .sort-result .fill {{
-            width: {score:.1f}%;
-            height: 100%;
-            border-radius: inherit;
-            background: {color};
+            width: {score:.1f}% !important;
+            height: 100% !important;
+            border-radius: inherit !important;
+            background: {color} !important;
           }}
           .sort-result .tip {{
-            padding: 12px;
-            border-radius: 11px;
-            background: #ffffffb8;
-            color: #405064;
-            font-size: .86rem;
-            line-height: 1.5;
+            padding: 18px !important;
+            border: 1px solid #edf1f5 !important;
+            border-radius: 18px !important;
+            background: #f1f7fd !important;
+            color: #263648 !important;
+            font-size: 1rem !important;
+            line-height: 1.6 !important;
+            font-weight: 500 !important;
           }}
           .sort-result .tip strong {{
-            display: block;
-            margin-bottom: 4px;
-            color: {color};
+            display: block !important;
+            margin-bottom: 8px !important;
+            color: {color} !important;
+            font-size: 1.15rem !important;
+            font-weight: 800 !important;
           }}
           .sort-result .bin {{
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            border-radius: 12px;
-            background: #ffffffa8;
+            display: flex !important;
+            width: 100% !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 12px !important;
+            min-width: 0 !important;
+            padding: 18px 10px !important;
+            border-radius: 20px !important;
+            background: #edf6ff !important;
           }}
           .sort-result svg {{
-            width: 92px;
-            height: 120px;
+            display: block !important;
+            width: min(100%, 145px) !important;
+            height: 220px !important;
+            max-width: 100% !important;
           }}
           .sort-result .bin span {{
-            color: {color};
-            font-size: .63rem;
-            font-weight: 750;
-            text-align: center;
+            color: {color} !important;
+            font-size: 1rem !important;
+            font-weight: 800 !important;
+            text-align: center !important;
           }}
-          @media (max-width: 600px) {{
-            .sort-result {{ grid-template-columns: 1fr 84px; padding: 14px; }}
-            .sort-result svg {{ width: 68px; height: 100px; }}
+          @media (max-width: 700px) {{
+            .sort-result {{
+              grid-template-columns: minmax(0, 1.35fr) minmax(120px, 0.85fr) !important;
+              gap: 14px !important;
+              padding: 18px !important;
+              min-height: 330px !important;
+            }}
+            .sort-result h3 {{ font-size: 1.3rem !important; }}
+            .sort-result .tip {{ padding: 14px !important; font-size: .92rem !important; }}
+            .sort-result svg {{ width: min(100%, 112px) !important; height: 165px !important; }}
+            .sort-result .bin span {{ font-size: .8rem !important; }}
+          }}
+          @media (max-width: 390px) {{
+            .sort-result {{
+              grid-template-columns: minmax(0, 1fr) 105px !important;
+              gap: 10px !important;
+              padding: 12px !important;
+            }}
+            .sort-result h3 {{ font-size: 1.12rem !important; }}
+            .sort-result .tip {{ padding: 10px !important; font-size: .82rem !important; }}
+            .sort-result svg {{ height: 135px !important; }}
           }}
         </style>
         <section class="sort-result">
           <div>
             <div class="eyebrow">ANALYSIS RESULT</div>
             <h3>{category}</h3>
-            <p class="score">Model score · {score:.1f}%</p>
+            <p class="score">Model score: <strong>{score:.1f}%</strong></p>
             <div class="track"><div class="fill"></div></div>
             <div class="tip"><strong>Recommendation</strong>{recommendation}</div>
           </div>
@@ -197,7 +240,7 @@ def render_classifier(model: object | None) -> None:
     metric_cols[1].metric("Model state", "Ready", "Local inference")
     metric_cols[2].metric("Best practice", "Check result", "Validate with local guidance")
 
-    upload_column, result_column = st.columns((1.1, 1), gap="medium")
+    upload_column, result_column = st.columns((0.9, 1.5), gap="medium")
     with upload_column:
         with st.container(border=True):
             st.subheader("1. Upload waste image")
