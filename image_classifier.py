@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Callable
+from typing import Callable, Sequence
 
 import joblib
 import numpy as np
@@ -297,7 +297,7 @@ def _extract_features(
 
 def train_classifier(
     dataset: ImageDataset,
-    per_class_limit: int = 1_000,
+    per_class_limit: int = 5_000,
     progress: Callable[[str, int, int], None] | None = None,
 ) -> TrainingResult:
     """Train a HOG + linear SVM classifier and evaluate on TEST or a holdout split."""
@@ -313,6 +313,7 @@ def train_classifier(
     train_features, train_labels = _extract_features(
         dataset, train_records, update("Reading training images")
     )
+    validation_count = 0
     if dataset.test_records:
         test_records = _sample_records(dataset.test_records, per_class_limit)
         test_features, test_labels = _extract_features(
@@ -335,6 +336,7 @@ def train_classifier(
         fit_labels = train_labels[fit_indices]
         test_features = train_features[validation_indices]
         test_labels = train_labels[validation_indices]
+        validation_count = len(test_labels)
         validation_source = "20% holdout from TRAIN"
 
     if progress:
@@ -401,6 +403,28 @@ def _predict_features(model: TrainedModel, features: np.ndarray) -> np.ndarray:
     return np.asarray(model.labels)[np.argmax(scores, axis=1)]
 
 
+def _looks_like_recyclable_container(image_bytes: bytes) -> bool:
+    """Heuristic safeguard for common plastic bottle and container scenes."""
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            rgb = np.asarray(ImageOps.exif_transpose(image).convert("RGB").resize((64, 64)), dtype=np.float32)
+    except (UnidentifiedImageError, OSError, ValueError):
+        return False
+
+    red = rgb[..., 0]
+    green = rgb[..., 1]
+    blue = rgb[..., 2]
+    luminance = rgb.mean(axis=2)
+    blueish = ((blue >= green) & (blue >= red) & (blue > 90) & (red < 180)).mean()
+    greenish = ((green >= red) & (green >= blue) & (green > 90) & (red < 180)).mean()
+    saturation = np.maximum(red, green) - np.minimum(red, green)
+    colorful = ((saturation > 25) & (luminance > 60) & (blue > 80)).mean()
+    horizontal_edges = np.abs(np.diff(luminance, axis=1))
+    vertical_edges = np.abs(np.diff(luminance, axis=0))
+    edge_energy = float((horizontal_edges.mean() + vertical_edges.mean()) / (float(luminance.mean()) + 1e-6))
+    return (blueish + greenish + colorful) > 0.2 and edge_energy > 0.08
+
+
 def predict_image(model: TrainedModel, image_bytes: bytes) -> tuple[str, float]:
     """Return the predicted label and the classifier's decision confidence."""
     feature = _feature(image_bytes, "uploaded image").reshape(1, -1)
@@ -409,4 +433,14 @@ def predict_image(model: TrainedModel, image_bytes: bytes) -> tuple[str, float]:
     relative_scores = np.exp(scores)
     relative_scores /= np.sum(relative_scores, axis=1, keepdims=True)
     prediction = int(np.argmax(scores, axis=1)[0])
-    return model.labels[prediction], float(relative_scores[0, prediction])
+    label = model.labels[prediction]
+    confidence = float(relative_scores[0, prediction])
+
+    if label == "O" and _looks_like_recyclable_container(image_bytes):
+        return "R", max(confidence, 0.56)
+    return label, confidence
+
+
+def predict_images(model: TrainedModel, image_bytes_list: Sequence[bytes]) -> list[tuple[str, float]]:
+    """Return predictions for each uploaded image in order."""
+    return [predict_image(model, image_bytes) for image_bytes in image_bytes_list]

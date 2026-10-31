@@ -15,6 +15,7 @@ from image_classifier import (
     dataset_from_zip,
     load_training_result,
     predict_image,
+    predict_images,
     save_training_result,
     train_classifier,
 )
@@ -22,6 +23,12 @@ from image_classifier import (
 APP_DIRECTORY = Path(__file__).parent
 MODEL_PATH = APP_DIRECTORY / "models" / "image_classifier.joblib"
 PAGE_OPTIONS = ("Classify waste", "Home", "About", "Tips", "Dataset info")
+FEATURE_OVERVIEW = (
+    (":material/insights: Smart analysis", "Classify waste in seconds with a fast HOG-based model."),
+    (":material/folder_open: Dataset control", "Train from bundled data or your own ZIP archive."),
+    (":material/collections_bookmark: Batch scan", "Upload multiple images and review all results in one pass."),
+    (":material/download: Export", "Download your trained model for reuse or deployment."),
+)
 WASTE_DETAILS = {
     "O": {
         "name": "Organic Waste",
@@ -93,10 +100,11 @@ def render_result_card(label: str, relative_score: float) -> None:
             padding: 20px;
             min-height: 220px;
             border: 1px solid {color}28;
-            border-radius: 16px;
+            border-radius: 18px;
             background: {details["soft_color"]};
             color: #183329;
             font-family: inherit;
+            box-shadow: 0 12px 32px rgba(11, 40, 42, 0.06);
           }}
           .sort-result h3 {{
             margin: 8px 0 16px;
@@ -184,11 +192,16 @@ def render_classifier(model: object | None) -> None:
         st.info("A trained model is not available yet. Open Dataset info to train one.")
         return
 
-    upload_column, result_column = st.columns((1.05, 1), gap="medium")
+    metric_cols = st.columns(3)
+    metric_cols[0].metric("Classification", "2 labels", "O / R")
+    metric_cols[1].metric("Model state", "Ready", "Local inference")
+    metric_cols[2].metric("Best practice", "Check result", "Validate with local guidance")
+
+    upload_column, result_column = st.columns((1.1, 1), gap="medium")
     with upload_column:
         with st.container(border=True):
             st.subheader("1. Upload waste image")
-            st.caption("Select a clear image of one item to sort.")
+            st.caption("Use a clear image of a single item to get a sorting suggestion.")
             uploaded_image = st.file_uploader(
                 "Upload an image (JPG, PNG, WEBP)",
                 type=("jpg", "jpeg", "png", "bmp", "webp"),
@@ -206,8 +219,30 @@ def render_classifier(model: object | None) -> None:
                         preview,
                         caption=uploaded_image.name,
                         width="stretch",
-                        alt="Image uploaded for waste classification",
                     )
+
+            st.markdown("### Batch scan")
+            batch_files = st.file_uploader(
+                "Upload multiple images to classify in one batch",
+                type=("jpg", "jpeg", "png", "bmp", "webp"),
+                accept_multiple_files=True,
+                key="batch_predictions",
+            )
+            if batch_files:
+                try:
+                    predictions = predict_images(model, [item.getvalue() for item in batch_files])
+                except (OSError, ValueError) as exc:
+                    st.error(f"Batch classification failed: {exc}", icon=":material/error:")
+                else:
+                    batch_rows = [
+                        {
+                            "Image": file.name,
+                            "Prediction": label,
+                            "Confidence": f"{score:.1%}",
+                        }
+                        for file, (label, score) in zip(batch_files, predictions)
+                    ]
+                    st.dataframe(batch_rows, hide_index=True, use_container_width=True)
 
     with result_column:
         with st.container(border=True):
@@ -216,12 +251,12 @@ def render_classifier(model: object | None) -> None:
                 st.html(
                     """
                     <div style="min-height:260px;display:grid;place-items:center;
-                        border:1px dashed #cad7cf;border-radius:14px;
-                        background:#f7fbf8;color:#607268;text-align:center;padding:20px">
+                        border:1px dashed rgba(255,255,255,0.28);border-radius:14px;
+                        background:rgba(255,255,255,0.08);color:#f3f7f6;text-align:center;padding:20px">
                       <div>
-                        <div style="font-size:2.3rem;color:#279b58">♻</div>
-                        <strong style="color:#284b37">Your result will appear here</strong>
-                        <p style="margin:8px 0 0">Upload a waste image to get a sorting suggestion.</p>
+                        <div style="font-size:2.3rem;color:#7ce7b5">♻</div>
+                        <strong style="color:#f3f7f6;font-weight:800;display:block;margin-bottom:8px; font-size:1.1rem;">Your result will appear here</strong>
+                        <p style="margin:8px 0 0;color:#edf2f4;font-weight:600;line-height:1.4;">Upload a waste image to get a sorting suggestion.</p>
                       </div>
                     </div>
                     """
@@ -249,7 +284,7 @@ if "training_result" not in st.session_state:
 training_result: TrainingResult | None = st.session_state["training_result"]
 with st.sidebar:
     st.markdown("## :material/eco: SmartSort AI")
-    st.caption("AI-powered waste classification")
+    st.caption("Professional waste classification studio")
     st.divider()
     page = st.radio(
         "Navigation",
@@ -259,43 +294,106 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     st.divider()
-    st.success(
-        "AI model ready" if training_result is not None else "Train a model to begin",
-        icon=":material/check_circle:" if training_result is not None else ":material/info:",
-    )
+    if training_result is not None:
+        st.success("AI model ready", icon=":material/check_circle:")
+        st.caption(f"Latest accuracy: {training_result.accuracy:.1%}")
+    else:
+        st.info("Train a model to begin", icon=":material/info:")
     st.caption("Keep our environment clean and green!")
 
 st.html(
     """
     <style>
+      .stApp {
+        background: linear-gradient(135deg, #0b1211 0%, #111d1a 36%, #0d1718 100%);
+        color: #edf7f3;
+      }
       .smart-hero {
         margin: 0 0 18px;
-        padding: 20px 24px;
-        border: 1px solid #dcece1;
-        border-radius: 18px;
-        background: linear-gradient(112deg, #e8f7ec 0%, #f5fbf7 58%, #eaf3ff 100%);
-        color: #1d3829;
+        padding: 24px 28px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 22px;
+        background: rgba(18, 28, 26, 0.9);
+        box-shadow: 0 14px 30px rgba(0,0,0,0.22);
+        color: #edf7f3;
       }
       .smart-hero .brand {
         margin: 0;
-        font-size: 1.75rem;
+        font-size: 1.8rem;
         font-weight: 760;
-        letter-spacing: -.035em;
+        letter-spacing: -.04em;
       }
       .smart-hero .tagline {
-        margin: 5px 0 0;
-        color: #526b5a;
-        font-size: .96rem;
+        margin: 6px 0 0;
+        color: #c9d9d3;
+        font-size: .98rem;
       }
       .smart-ready {
         display: inline-block;
-        margin-top: 14px;
-        padding: 5px 10px;
-        border-radius: 99px;
-        background: #d7f2df;
-        color: #207343;
+        margin-top: 16px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(18, 201, 135, 0.18);
+        color: #9ef3cb;
         font-size: .78rem;
-        font-weight: 650;
+        font-weight: 700;
+        border: 1px solid rgba(158, 243, 203, 0.2);
+      }
+      [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(11, 17, 16, 0.96), rgba(15, 22, 21, 0.96));
+        border-right: 1px solid rgba(255,255,255,0.06);
+      }
+      .stContainer > div {
+        border-radius: 18px;
+      }
+      .block-container {
+        padding-top: 2rem;
+      }
+      .stRadio > div, .stSelectbox, .stDataFrame, .stButton > button,
+      .stFileUploader, .stTextInput, .stNumberInput, .stSlider {
+        border-radius: 14px;
+      }
+      div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(15, 22, 21, 0.8);
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+      .stApp {
+        color: #f3f7f6;
+      }
+      .stMarkdown, .stCaption, .stDataFrame, .stMetric, .stSuccess, .stInfo, .stError,
+      .stButton, .stRadio label, .stCheckbox label, .stSelectbox label,
+      .stTextInput label, .stNumberInput label, .stSlider label,
+      h1, h2, h3, h4, h5, h6, p, li {
+        color: #f3f7f6 !important;
+      }
+      div[data-testid="stFileUploader"] {
+        background: rgba(15, 22, 21, 0.9) !important;
+        border: 1px solid rgba(255,255,255,0.14) !important;
+        border-radius: 16px !important;
+      }
+      div[data-testid="stFileUploader"] * {
+        color: #f3f7f6 !important;
+        font-weight: 700 !important;
+      }
+      div[data-testid="stFileUploader"] label,
+      div[data-testid="stFileUploader"] button,
+      div[data-testid="stFileUploader"] .st-emotion-cache-1hfw9n3,
+      div[data-testid="stFileUploader"] .st-emotion-cache-18rm35g {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        text-shadow: 0 0 0 rgba(0,0,0,0) !important;
+      }
+      .stAppHeader {
+        display: none;
+      }
+      header[data-testid="stHeader"] {
+        display: none;
+      }
+      .stRadio [role="radio"] {
+        background: rgba(255,255,255,0.18);
+      }
+      .stRadio [role="radio"][aria-checked="true"] {
+        background: rgba(24, 224, 152, 0.8);
       }
     </style>
     """
@@ -319,6 +417,12 @@ if page in ("Classify waste", "Home"):
             f"Details: {st.session_state['model_load_error']}",
             icon=":material/error:",
         )
+    feature_cols = st.columns(4)
+    for column, (title, description) in zip(feature_cols, FEATURE_OVERVIEW):
+        with column:
+            with st.container(border=True):
+                st.markdown(f"### {title}")
+                st.caption(description)
     render_classifier(training_result.model if training_result else None)
 
 elif page == "About":
@@ -417,7 +521,7 @@ elif page == "Dataset info":
                     "Maximum images per label in each split",
                     min_value=50,
                     max_value=5_000,
-                    value=1_000,
+                    value=5_000,
                     step=50,
                 )
                 train_clicked = st.form_submit_button(

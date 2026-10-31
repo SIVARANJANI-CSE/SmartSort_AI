@@ -12,6 +12,7 @@ from image_classifier import (
     dataset_from_zip,
     load_training_result,
     predict_image,
+    predict_images,
     save_training_result,
     train_classifier,
 )
@@ -67,6 +68,51 @@ class DatasetTests(unittest.TestCase):
         self.assertEqual(dataset.classes, ("O", "R"))
         self.assertEqual(len(dataset.train_records), 4)
         self.assertEqual(len(dataset.test_records), 2)
+
+    def test_predicts_multiple_images(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory) / "DATASET"
+            for label, brightness in (("O", 20), ("R", 230)):
+                class_dir = root / "TRAIN" / label
+                class_dir.mkdir(parents=True)
+                for index in range(4):
+                    (class_dir / f"{index}.png").write_bytes(image_bytes(brightness + index))
+
+            dataset = dataset_from_directory(Path(temporary_directory))
+            result = train_classifier(dataset, per_class_limit=10)
+            predictions = predict_images(
+                result.model,
+                [image_bytes(25), image_bytes(235), image_bytes(25), image_bytes(235)],
+            )
+
+            self.assertEqual(len(predictions), 4)
+            self.assertTrue(all(label in {"O", "R"} for label, _ in predictions))
+            self.assertTrue(all(0.0 <= score <= 1.0 for _, score in predictions))
+
+    def test_reclassifies_bottle_like_images_as_recyclable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory) / "DATASET"
+            for split in ("TRAIN", "TEST"):
+                for label, brightness in (("O", 20), ("R", 230)):
+                    class_dir = root / split / label
+                    class_dir.mkdir(parents=True)
+                    for index in range(4):
+                        (class_dir / f"{index}.png").write_bytes(image_bytes(brightness + index))
+
+            dataset = dataset_from_directory(Path(temporary_directory))
+            result = train_classifier(dataset, per_class_limit=10)
+
+            bottle = np.zeros((64, 64, 3), dtype=np.uint8)
+            bottle[:, :, 0] = 30
+            bottle[:, :, 1] = 120
+            bottle[:, :, 2] = 200
+            bottle[:, ::4] = (180, 200, 220)
+            bottle_image = io.BytesIO()
+            Image.fromarray(bottle).save(bottle_image, format="PNG")
+
+            predicted, score = predict_image(result.model, bottle_image.getvalue())
+            self.assertEqual(predicted, "R")
+            self.assertGreater(score, 0.5)
 
     def test_rejects_zip_path_traversal(self) -> None:
         archive_bytes = io.BytesIO()
